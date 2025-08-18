@@ -24,7 +24,7 @@ Macro Maker records mouse clicks (with screen positions and delays) and replays 
 You can change these by editing `main.ahk` and calling:
 
 - `MacroRecorder(startStop, play, save, bloomRadius, load)`
-	- Example: `MacroRecorder("F7", "F8", "F9", 12, "F6")`
+  - Example: `MacroRecorder("F7", "F8", "F9", 12, "F6")`
 
 ## How Recording and Playback Work
 
@@ -39,7 +39,7 @@ Macros are saved as INI files under `saved_macros/` with this structure:
 - Section: `[macro]`
 - Key: `count` = number of steps
 - Steps: `step1`, `step2`, ... each line like:
-	- `delay=123;mouse=LButton;x=100;y=200`
+  - `delay=123;mouse=LButton;x=100;y=200`
 
 ## Usage
 
@@ -55,12 +55,12 @@ Macros are saved as INI files under `saved_macros/` with this structure:
 - `main.ahk` — Entry point; initializes the recorder and global hotkeys
 - `record_macro/record_macro.ahk` — Macro recorder (record/play/save/load)
 - `helper_functions/`
-	- `random_mouse_movement.ahk` — Smooth mouse path with easing/jitter
-	- `click_bloom.ahk` — Move to a nearby pixel and click (performs the click)
-	- `random_time_delay.ahk` — Returns a random time in ms within a range
+  - `random_mouse_movement.ahk` — Smooth mouse path with easing/jitter
+  - `click_bloom.ahk` — Move to a nearby pixel and click (performs the click)
+  - `random_time_delay.ahk` — Returns a random time in ms within a range
 - `saved_macros/` — Saved macro INI files
 - `scripts/`
-	- `click_2_locations.ahk` — Example script that moves and clicks between two points
+  - `click_2_locations.ahk` — Example script that moves and clicks between two points
 
 ## Notes
 
