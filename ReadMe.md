@@ -16,9 +16,10 @@ Macro Maker records mouse clicks (with screen positions and delays) and replays 
 ## Default Hotkeys
 
 - F8 — Start/Stop recording
-- F9 — Play the in-memory macro
+- F9 — Start/Stop playback (toggle)
 - F10 — Save the in-memory macro to `saved_macros/<name>.ini`
 - F11 — Load a saved macro by name and play it immediately
+- Shift+F9 — Toggle loop mode (when ON, playback repeats until stopped)
 - F12 — Cancel/Exit the program
 
 You can change these by editing `main.ahk` and calling:
@@ -31,6 +32,11 @@ You can change these by editing `main.ahk` and calling:
 - Recording captures only mouse clicks (left, right, middle) with their screen coordinates and the delay since the previous action.
 - Playback moves from the current cursor position to the next recorded position using `random_mouse_movement.ahk` (Bezier curve with ease-in/out) and then clicks using `click_bloom.ahk` (moves slightly within a radius and clicks).
 - Screen coordinates are used (`CoordMode "Mouse", "Screen"`) for consistency across apps/monitors.
+
+### Playback control and looping
+
+- Press F9 to start playback; press F9 again to stop immediately (cancel-aware between steps and delays).
+- Toggle loop mode with Shift+F9. When loop is ON, the macro repeats until you press F9 to stop.
 
 ### Save Format (INI)
 
@@ -45,10 +51,11 @@ Macros are saved as INI files under `saved_macros/` with this structure:
 
 1. Run `main.ahk` with AutoHotkey v2.
 2. Press F8 to start recording; click where needed; press F8 again to stop.
-3. Press F9 to play back from the current cursor position.
+3. Press F9 to start playback from the current cursor position; press F9 again to stop.
 4. Press F10 to save to an INI in `saved_macros/`.
-5. Press F11 to load a saved macro by name and play it.
-6. Press F12 any time to exit.
+5. Press F11 to load a saved macro by name and play it immediately.
+6. Optionally toggle looping with Shift+F9 (plays repeatedly until stopped with F9).
+7. Press F12 any time to exit.
 
 ## File Structure
 

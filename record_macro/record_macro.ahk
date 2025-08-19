@@ -24,6 +24,9 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         playKey: playHotkey,
         saveKey: saveHotkey,
         loadKey: loadHotkey,
+        playing: false,
+        cancel: false,
+        loop: false,
         handlersRegistered: false
     }
 
@@ -31,9 +34,11 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
 
     ; Register control hotkeys
     Hotkey startStopHotkey, (*) => ToggleRecording(), "On"
-    Hotkey playHotkey, (*) => PlayMacro(), "On"
+    Hotkey playHotkey, (*) => TogglePlay(), "On"
     Hotkey saveHotkey, (*) => SaveMacro(), "On"
     Hotkey loadHotkey, (*) => LoadAndPlay(), "On"
+    ; Shift+Play hotkey toggles loop mode
+    try Hotkey "+" . playHotkey, (*) => ToggleLoop(), "On"
 
     ; Register capture hotkeys (mouse buttons only)
     if (!recorder.handlersRegistered) {
@@ -53,6 +58,11 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
 
     ToggleRecording() {
         if (recorder.recording) {
+            ; On stop: capture final idle time as a pause step
+            finalDelay := A_TickCount - recorder.lastTick
+            if (finalDelay > 0) {
+                recorder.macro.Push(Map("type", "pause", "delay", finalDelay))
+            }
             recorder.recording := false
             ToolTip "Recording stopped (" recorder.macro.Length ")", 10, 10
             SetTimer () => ToolTip(), -800
@@ -88,27 +98,53 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         RecordMouse(btn)
     }
 
-    PlayMacro() {
-        if (recorder.recording)
-            return ; avoid self-capture or interference
+    TogglePlay() {
+        if (recorder.playing) {
+            recorder.cancel := true
+            ToolTip "Stopping playback...", 10, 10
+            SetTimer () => ToolTip(), -500
+            return
+        }
         if (recorder.macro.Length = 0) {
             ToolTip "No macro recorded", 10, 10
             SetTimer () => ToolTip(), -800
             return
         }
-        ; Play back steps with human-like mouse and natural delays
-        ; Capture starting mouse pos to compute paths
-        curX := 0, curY := 0
-        MouseGetPos &curX, &curY
-        for step in recorder.macro {
-            Sleep Max(0, step["delay"]) ; respect recorded delay as-is
-            if (step["type"] = "mouse") {
-                tx := step["x"], ty := step["y"]
-                dur := ComputeMoveDuration(curX, curY, tx, ty)
-                random_mouse_movement(curX, curY, tx, ty, dur, true, recorder.bloomRadius)
-                curX := tx, curY := ty
+        PlayMacro()
+    }
+
+    PlayMacro() {
+        if (recorder.recording)
+            return ; avoid self-capture or interference
+        recorder.cancel := false
+        recorder.playing := true
+        loop {
+            ; Capture starting mouse pos to compute paths
+            curX := 0, curY := 0
+            MouseGetPos &curX, &curY
+            for step in recorder.macro {
+                if (recorder.cancel)
+                    break
+                SleepWithCancel(Max(0, step["delay"])) ; respect recorded delay
+                if (recorder.cancel)
+                    break
+                if (step["type"] = "mouse") {
+                    tx := step["x"], ty := step["y"]
+                    dur := ComputeMoveDuration(curX, curY, tx, ty)
+                    random_mouse_movement(curX, curY, tx, ty, dur, true, recorder.bloomRadius)
+                    curX := tx, curY := ty
+                } else if (step["type"] = "pause") {
+                    ; Nothing else after sleeping the delay for pause
+                }
             }
+            if (recorder.cancel || !recorder.loop)
+                break
         }
+        recorder.playing := false
+        recorder.cancel := false
+        if (recorder.loop)
+            ToolTip "Loop stopped or completed.", 10, 10
+        SetTimer () => ToolTip(), -600
     }
 
     SaveMacro() {
@@ -139,7 +175,7 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         if (recorder.recording)
             return
         if (LoadMacro())
-            PlayMacro()
+            TogglePlay()
     }
 
     LoadMacro() {
@@ -190,14 +226,18 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     }
 
     SerializeStep(step) {
-        ; Only mouse steps are recorded/saved
-        return "delay=" step["delay"] ";mouse=" step["button"] ";x=" step["x"] ";y=" step["y"]
+        if (step["type"] = "mouse")
+            return "delay=" step["delay"] ";mouse=" step["button"] ";x=" step["x"] ";y=" step["y"]
+        ; pause step
+        return "delay=" step["delay"] ";pause=1"
     }
 
     ParseStep(line) {
-        ; Expect format: delay=NNN;mouse=Btn;x=NN;y=NN
+        ; Format examples:
+        ;  - delay=NNN;mouse=Btn;x=NN;y=NN
+        ;  - delay=NNN;pause=1
         parts := StrSplit(line, ";")
-        delay := 0, btn := "", x := "", y := ""
+        delay := 0, btn := "", x := "", y := "", isPause := false
         for p in parts {
             kv := StrSplit(p, "=", , 2)
             if (kv.Length >= 2) {
@@ -211,8 +251,12 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                     x := 0 + v
                 else if (k = "y")
                     y := 0 + v
+                else if (k = "pause")
+                    isPause := (v != "0")
             }
         }
+        if (isPause)
+            return Map("type", "pause", "delay", delay)
         if (btn = "" || x = "" || y = "")
             return false
         return Map("type", "mouse", "button", btn, "x", x, "y", y, "delay", delay)
@@ -224,5 +268,21 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         if (val > hi)
             return hi
         return val
+    }
+
+    ToggleLoop() {
+        recorder.loop := !recorder.loop
+        ToolTip "Loop: " (recorder.loop ? "ON" : "OFF") " (Shift+" recorder.playKey ")", 10, 10
+        SetTimer () => ToolTip(), -800
+    }
+
+    SleepWithCancel(ms) {
+        ; Sleep in small chunks to allow responsive stop via F9
+        remaining := ms
+        while (remaining > 0 && !recorder.cancel) {
+            chunk := remaining > 25 ? 25 : remaining
+            Sleep chunk
+            remaining -= chunk
+        }
     }
 }
