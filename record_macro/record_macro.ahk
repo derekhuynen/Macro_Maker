@@ -1,6 +1,7 @@
 #Requires AutoHotkey v2.0
 
 #Include ..\helper_functions\random_mouse_movement.ahk
+#Include ..\helper_functions\bloom.ahk
 
 ; Macro Recorder Module (AutoHotkey v2)
 ; Provides: MacroRecorder(startStopHotkey?, playHotkey?, saveHotkey?, bloomRadius?)
@@ -206,10 +207,12 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                 if (recorder.cancel)
                     break
                 if (step["type"] = "mouse") {
-                    tx := step["x"], ty := step["y"]
-                    dur := ComputeMoveDuration(curX, curY, tx, ty)
-                    random_mouse_movement(curX, curY, tx, ty, dur, true, recorder.bloomRadius)
-                    curX := tx, curY := ty
+                    ; Bloom the click target and use it for both travel and click
+                    loc := bloom(step["x"], step["y"], recorder.bloomRadius)
+                    bx := loc[1], by := loc[2]
+                    dur := ComputeMoveDuration(curX, curY, bx, by)
+                    random_mouse_movement(curX, curY, bx, by, dur, true, recorder.bloomRadius)
+                    curX := bx, curY := by
                 } else if (step["type"] = "key") {
                     Send BuildSendChord(step)
                 } else if (step["type"] = "move") {
