@@ -13,7 +13,7 @@ UI := {
     hwnd: 0,
     win: 0,
     controls: {},
-    hotkeys: { record: "F8", play: "F9", save: "F10", load: "F11", loop: "+F9", exit: "F12" },
+    hotkeys: { record: "F8", play: "F9", save: "F10", load: "F11", loop: "+F9", hide: "F6", remove: "^F6", exit: "F12" },
     timers: { tick: 0 },
     state: {
         mouseX: 0,
@@ -24,7 +24,8 @@ UI := {
         stepCur: 0,
         stepTotal: 0,
         playStartTick: 0,
-        playElapsedMs: 0
+        playElapsedMs: 0,
+        hidden: false
     }
 }
 
@@ -40,6 +41,10 @@ ui_init(opts := 0) {
             UI.hotkeys.load := opts.load
         if (opts.HasOwnProp("loop"))
             UI.hotkeys.loop := opts.loop
+        if (opts.HasOwnProp("hide"))
+            UI.hotkeys.hide := opts.hide
+        if (opts.HasOwnProp("remove"))
+            UI.hotkeys.remove := opts.remove
         if (opts.HasOwnProp("exit"))
             UI.hotkeys.exit := opts.exit
     }
@@ -64,7 +69,7 @@ ui_init(opts := 0) {
     g.AddText("xm Background000000 w360 h1") ; divider
 
     ; Two columns under the buttons: Info (left), Keybinds (right)
-    gbInfo := g.AddGroupBox("xm Background000000 w175 h126", "")
+    gbInfo := g.AddGroupBox("xm Background000000 w175 h160", "")
     gbInfo.GetPos(&ix, &iy, &iw, &ih)
     lblTime := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 10, iw - 16), "time: 0:00")
     lblStep := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 30, iw - 16), "step: 0/0")
@@ -74,10 +79,10 @@ ui_init(opts := 0) {
     lblLoop := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 110, iw - 16), "loop: false")
 
     ; Create keybinds box aligned to the info box (same y), 10px to the right
-    gbKeys := g.AddGroupBox(Format("x{} y{} w175 h126 Background000000", ix + iw + 10, iy), "")
+    gbKeys := g.AddGroupBox(Format("x{} y{} w175 h160 Background000000", ix + iw + 10, iy), "")
     gbKeys.GetPos(&kx, &ky, &kw, &kh)
     lblKeysHeader := g.AddText(Format("x{} y{} c808080 Background000000 w{}", kx + 8, ky + 10, kw - 16), "Keybinds:")
-    lblKeys := g.AddText(Format("x{} y{} cWhite Background000000 w{} r6", kx + 8, ky + 28, kw - 16), "")
+    lblKeys := g.AddText(Format("x{} y{} cWhite Background000000 w{} r8", kx + 8, ky + 28, kw - 16), "")
     try lblKeys.SetFont("s9, Consolas")
 
     UI.win := g
@@ -108,11 +113,38 @@ ui_init(opts := 0) {
 ui_show() {
     if UI.win
         UI.win.Show()
+    UI.state.hidden := false
 }
 
 ui_hide() {
     if UI.win
         UI.win.Hide()
+    UI.state.hidden := true
+}
+
+; Toggle visibility of the UI window
+ui_toggle_visibility() {
+    if (!UI.win)
+        return
+    if (UI.state.hidden)
+        ui_show()
+    else
+        ui_hide()
+}
+
+; Destroy the UI and stop timers; safe to call multiple times
+ui_destroy() {
+    if (UI.timers.tick) {
+        try SetTimer ui_tick, 0
+        UI.timers.tick := 0
+    }
+    if (UI.win) {
+        try UI.win.Destroy()
+    }
+    UI.win := 0
+    UI.hwnd := 0
+    UI.controls := {}
+    UI.state.hidden := true
 }
 
 ui_set_mouse(x, y) {
@@ -257,6 +289,8 @@ ui_update_keys_label() {
     txt .= "Save:        " human_hotkey(UI.hotkeys.save) "`n"
     txt .= "Load:        " human_hotkey(UI.hotkeys.load) "`n"
     txt .= "Loop:        " human_hotkey(UI.hotkeys.loop) "`n"
+    txt .= "Hide UI:     " human_hotkey(UI.hotkeys.hide) "`n"
+    txt .= "Remove UI:   " human_hotkey(UI.hotkeys.remove) "`n"
     txt .= "Exit:        " human_hotkey(UI.hotkeys.exit)
     UI.controls.lblKeys.Text := txt
 }
