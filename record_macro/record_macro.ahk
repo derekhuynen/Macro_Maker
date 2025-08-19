@@ -8,7 +8,7 @@
 ; - Toggle recording with startStopHotkey
 ; - Play with playHotkey
 ; - Save to saved_macros/*.ini with saveHotkey
-; Records: mouse clicks (position + button), continuous mouse movement (sampled), and pauses. Keys are not recorded.
+; Records: mouse clicks (position + button), continuous mouse movement (sampled), key presses with modifiers, and pauses.
 
 ; Usage:
 ;   MacroRecorder() ; defaults: F8 (start/stop), F9 (play), F10 (save), F11 (load)
@@ -46,12 +46,20 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     ; Shift+Play hotkey toggles loop mode
     try Hotkey "+" . playHotkey, (*) => ToggleLoop(), "On"
 
-    ; Register capture hotkeys (mouse buttons only)
+    ; Register capture hotkeys (mouse buttons + keyboard press)
     if (!recorder.handlersRegistered) {
         ; Mouse buttons (down only). Use a shared handler to avoid capturing loop variables.
         for mkey in ["LButton", "RButton", "MButton"] {
             try {
                 Hotkey "*~" mkey, OnMouseHotkey, "On"
+            } catch as e {
+            }
+        }
+
+        ; Keyboard keys (down only). We record with modifiers state.
+        for k in GetKeyCaptureList() {
+            try {
+                Hotkey "*~" k, OnKeyHotkey, "On"
             } catch as e {
             }
         }
@@ -114,6 +122,38 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         RecordMouse(btn)
     }
 
+    OnKeyHotkey(*) {
+        if (!recorder.recording)
+            return
+        hk := A_ThisHotkey ; e.g., "*~a"
+        ; Extract the base key name we registered
+        base := hk
+        if (SubStr(base, 1, 2) = "*~")
+            base := SubStr(base, 3)
+
+        ; Ignore control hotkeys (start/stop/play/save/load)
+        if (base = recorder.startStopKey || base = recorder.playKey || base = recorder.saveKey || base = recorder.loadKey
+        )
+            return
+
+        delay := A_TickCount - recorder.lastTick
+        recorder.lastTick := A_TickCount
+
+        mods := Map(
+            "shift", GetKeyState("Shift", "P") ? 1 : 0,
+            "ctrl", GetKeyState("Ctrl", "P") ? 1 : 0,
+            "alt", GetKeyState("Alt", "P") ? 1 : 0,
+            "win", (GetKeyState("LWin", "P") || GetKeyState("RWin", "P")) ? 1 : 0
+        )
+
+        recorder.macro.Push(Map(
+            "type", "key",
+            "key", base,
+            "mods", mods,
+            "delay", delay
+        ))
+    }
+
     TrackMouseMovement() {
         if (!recorder.recording)
             return
@@ -171,6 +211,8 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                     dur := ComputeMoveDuration(curX, curY, tx, ty)
                     random_mouse_movement(curX, curY, tx, ty, dur, true, recorder.bloomRadius)
                     curX := tx, curY := ty
+                } else if (step["type"] = "key") {
+                    Send BuildSendChord(step)
                 } else if (step["type"] = "move") {
                     ; Reproduce recorded path point-by-point for smoothness
                     MouseMove step["x"], step["y"], 0
@@ -270,6 +312,11 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     SerializeStep(step) {
         if (step["type"] = "mouse")
             return "delay=" step["delay"] ";mouse=" step["button"] ";x=" step["x"] ";y=" step["y"]
+        if (step["type"] = "key") {
+            mods := step["mods"]
+            return "delay=" step["delay"] ";key=" step["key"] ";shift=" mods["shift"] ";ctrl=" mods["ctrl"] ";alt=" mods[
+                "alt"] ";win=" mods["win"]
+        }
         if (step["type"] = "move")
             return "delay=" step["delay"] ";move=1;x=" step["x"] ";y=" step["y"]
         ; pause step
@@ -279,10 +326,12 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     ParseStep(line) {
         ; Format examples:
         ;  - delay=NNN;mouse=Btn;x=NN;y=NN
+        ;  - delay=NNN;key=a;shift=1;ctrl=0;alt=0;win=0
         ;  - delay=NNN;move=1;x=NN;y=NN
         ;  - delay=NNN;pause=1
         parts := StrSplit(line, ";")
-        delay := 0, btn := "", x := "", y := "", isPause := false, isMove := false
+        delay := 0, btn := "", x := "", y := "", isPause := false, isMove := false, key := "", shift := 0, ctrl := 0,
+            alt := 0, win := 0
         for p in parts {
             kv := StrSplit(p, "=", , 2)
             if (kv.Length >= 2) {
@@ -292,6 +341,8 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                     delay := 0 + v
                 else if (k = "mouse")
                     btn := v
+                else if (k = "key")
+                    key := v
                 else if (k = "x")
                     x := 0 + v
                 else if (k = "y")
@@ -300,12 +351,28 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                     isPause := (v != "0")
                 else if (k = "move")
                     isMove := (v != "0")
+                else if (k = "shift")
+                    shift := 0 + v
+                else if (k = "ctrl")
+                    ctrl := 0 + v
+                else if (k = "alt")
+                    alt := 0 + v
+                else if (k = "win")
+                    win := 0 + v
             }
         }
         if (isPause)
             return Map("type", "pause", "delay", delay)
         if (isMove && x != "" && y != "")
             return Map("type", "move", "x", x, "y", y, "delay", delay)
+        if (key != "") {
+            return Map(
+                "type", "key",
+                "key", key,
+                "mods", Map("shift", shift, "ctrl", ctrl, "alt", alt, "win", win),
+                "delay", delay
+            )
+        }
         if (btn = "" || x = "" || y = "")
             return false
         return Map("type", "mouse", "button", btn, "x", x, "y", y, "delay", delay)
@@ -333,5 +400,65 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
             Sleep chunk
             remaining -= chunk
         }
+    }
+
+    ; --- keyboard helpers ---
+
+    GetKeyCaptureList() {
+        keys := []
+        ; Letters
+        for c in StrSplit("abcdefghijklmnopqrstuvwxyz", "")
+            keys.Push(c)
+        ; Digits
+        for c in StrSplit("0123456789", "")
+            keys.Push(c)
+        ; Function keys
+        i := 1
+        while (i <= 24) {
+            keys.Push("F" i)
+            i++
+        }
+        ; Navigation and common
+        for k in ["Enter", "Space", "Tab", "Esc", "Escape", "Backspace", "Delete", "Insert", "Home", "End", "PgUp",
+            "PgDn", "Up", "Down", "Left", "Right", "AppsKey", "PrintScreen", "Pause", "CtrlBreak", "CapsLock",
+            "NumLock", "ScrollLock",
+            "Numpad0", "Numpad1", "Numpad2", "Numpad3", "Numpad4", "Numpad5", "Numpad6", "Numpad7", "Numpad8",
+            "Numpad9",
+            "NumpadDiv", "NumpadMult", "NumpadAdd", "NumpadSub", "NumpadEnter", "NumpadDot"]
+            keys.Push(k)
+        return keys
+    }
+
+    BuildSendChord(step) {
+        mods := step["mods"]
+        prefix := (mods["ctrl"] ? "^" : "") (mods["alt"] ? "!" : "") (mods["shift"] ? "+" : "") (mods["win"] ? "#" : ""
+        )
+        k := step["key"]
+        return prefix . FormatKeyForSend(k)
+    }
+
+    FormatKeyForSend(k) {
+        if (IsKeyRequiringBraces(k))
+            return "{" k "}"
+        return k
+    }
+
+    IsKeyRequiringBraces(k) {
+        static special := Map(
+            "Enter", 1, "Space", 1, "Tab", 1, "Esc", 1, "Escape", 1, "Backspace", 1, "Delete", 1, "Insert", 1, "Home",
+            1, "End", 1,
+            "PgUp", 1, "PgDn", 1, "Up", 1, "Down", 1, "Left", 1, "Right", 1, "AppsKey", 1, "PrintScreen", 1, "Pause", 1,
+            "CtrlBreak", 1,
+            "CapsLock", 1, "NumLock", 1, "ScrollLock", 1,
+            "Numpad0", 1, "Numpad1", 1, "Numpad2", 1, "Numpad3", 1, "Numpad4", 1, "Numpad5", 1, "Numpad6", 1, "Numpad7",
+            1, "Numpad8", 1, "Numpad9", 1,
+            "NumpadDiv", 1, "NumpadMult", 1, "NumpadAdd", 1, "NumpadSub", 1, "NumpadEnter", 1, "NumpadDot", 1
+        )
+        if (special.Has(k))
+            return true
+        ; Function keys
+        if RegExMatch(k, "^F([1-9]|1[0-9]|2[0-4])$")
+            return true
+        return false
     }
 }
