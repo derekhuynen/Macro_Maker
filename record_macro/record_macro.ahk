@@ -1,6 +1,5 @@
 #Requires AutoHotkey v2.0
 
-#Include ..\helper_functions\click_bloom.ahk
 #Include ..\helper_functions\random_mouse_movement.ahk
 
 ; Macro Recorder Module (AutoHotkey v2)

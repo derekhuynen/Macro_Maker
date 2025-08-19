@@ -1,4 +1,3 @@
-#Include ..\helper_functions\click_bloom.ahk
 #Include ..\helper_functions\random_mouse_movement.ahk
 
 ; Example locations (replace with your own coordinates)
