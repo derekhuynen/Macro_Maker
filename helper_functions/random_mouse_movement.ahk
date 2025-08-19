@@ -17,13 +17,14 @@ random_mouse_movement(x1, y1, x2, y2, duration, doClick := false, bloomRadius :=
         return
     }
 
-    steps := Round(Clamp(dist / 6, 10, 240)) + myRandom(0, 4)
-    steps := Max(8, steps)
-    ; Stable per-step delay to avoid jitter while honoring target duration
+    ; Increase interpolation steps for smoother motion
+    steps := Round(Clamp(dist / 3.2, 18, 520)) + myRandom(2, 6)
+    steps := Max(16, steps)
+    ; Stable per-step delay to preserve target duration
     perDelay := Max(1, Floor(duration / steps))
 
     ; Generate random control points for a Bezier-like curve (scaled with distance)
-    jitter := Clamp(Round(dist * 0.08), 2, 80) ; limit jitter based on distance, small for short moves
+    jitter := Clamp(Round(dist * 0.06), 1, 60) ; slightly less jitter for smoother path
     c1x := x1 + (tx - x1) * 0.3 + myRandom(-jitter, jitter)
     c1y := y1 + (ty - y1) * 0.3 + myRandom(-jitter, jitter)
     c2x := x1 + (tx - x1) * 0.7 + myRandom(-jitter, jitter)
