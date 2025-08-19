@@ -14,7 +14,7 @@
 ;   MacroRecorder() ; defaults: F8 (start/stop), F9 (play), F10 (save), F11 (load)
 ;   or customize: MacroRecorder("F7", "F8", "F9", 10)
 
-MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", bloomRadius := 10, loadHotkey := "F11") {
+MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", bloomRadius := 20, loadHotkey := "F11") {
     static recorder := {
         recording: false,
         macro: [],
