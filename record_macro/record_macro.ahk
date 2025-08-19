@@ -84,12 +84,14 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                 recorder.macro.Push(Map("type", "pause", "delay", finalDelay))
             }
             recorder.recording := false
+            try ui_set_recording(false)
             ToolTip "Recording stopped (" recorder.macro.Length ")", 10, 10
             SetTimer () => ToolTip(), -800
         } else {
             recorder.macro := []
             recorder.lastTick := A_TickCount
             recorder.recording := true
+            try ui_set_recording(true)
             _lx := 0, _ly := 0
             MouseGetPos &_lx, &_ly
             recorder.lastX := _lx
@@ -179,6 +181,7 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     TogglePlay() {
         if (recorder.playing) {
             recorder.cancel := true
+            try ui_set_playing(false)
             ToolTip "Stopping playback...", 10, 10
             SetTimer () => ToolTip(), -500
             return
@@ -196,16 +199,46 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
             return ; avoid self-capture or interference
         recorder.cancel := false
         recorder.playing := true
+        isFirstPass := true
+        try {
+            ui_set_step(0, recorder.macro.Length)
+            ui_set_time(0)
+            ui_set_playing(true)
+            ui_set_loop(recorder.loop)
+        }
         loop {
             ; Capture starting mouse pos to compute paths
             curX := 0, curY := 0
             MouseGetPos &curX, &curY
+            ; If we're looping and not on the first pass, smooth-move to the first recorded 'move' step
+            if (recorder.loop && !isFirstPass) {
+                ; Find the first actionable cursor target if it's a recorded move
+                targetX := "", targetY := "", found := false
+                for st in recorder.macro {
+                    if (st["type"] = "move") {
+                        targetX := st["x"], targetY := st["y"]
+                        found := true
+                        break
+                    } else if (st["type"] = "mouse") {
+                        ; First step is a click; it will already move smoothly during playback, so skip pre-move
+                        break
+                    }
+                }
+                if (found) {
+                    dur0 := ComputeMoveDuration(curX, curY, targetX, targetY)
+                    random_mouse_movement(curX, curY, targetX, targetY, dur0, false, recorder.bloomRadius)
+                    curX := targetX, curY := targetY
+                }
+            }
+            idx := 0
             for step in recorder.macro {
+                idx++
                 if (recorder.cancel)
                     break
                 SleepWithCancel(Max(0, step["delay"])) ; respect recorded delay
                 if (recorder.cancel)
                     break
+                try ui_set_step(idx, recorder.macro.Length)
                 if (step["type"] = "mouse") {
                     ; Bloom the click target and use it for both travel and click
                     loc := bloom(step["x"], step["y"], recorder.bloomRadius)
@@ -225,8 +258,10 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
             }
             if (recorder.cancel || !recorder.loop)
                 break
+            isFirstPass := false
         }
         recorder.playing := false
+        try ui_set_playing(false)
         recorder.cancel := false
         if (recorder.loop)
             ToolTip "Loop stopped or completed.", 10, 10
@@ -390,6 +425,7 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
 
     ToggleLoop() {
         recorder.loop := !recorder.loop
+        try ui_set_loop(recorder.loop)
         ToolTip "Loop: " (recorder.loop ? "ON" : "OFF") " (Shift+" recorder.playKey ")", 10, 10
         SetTimer () => ToolTip(), -800
     }
