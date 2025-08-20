@@ -18,8 +18,8 @@ random_mouse_movement(x1, y1, x2, y2, duration, doClick := false, bloomRadius :=
     }
 
     ; Increase interpolation steps for smoother motion
-    steps := Round(Clamp(dist / 3.2, 18, 520)) + myRandom(2, 6)
-    steps := Max(16, steps)
+    steps := Round(Clamp(dist / 2.6, 22, 700)) + myRandom(3, 8)
+    steps := Max(20, steps)
     ; Stable per-step delay to preserve target duration
     perDelay := Max(1, Floor(duration / steps))
 
@@ -30,6 +30,7 @@ random_mouse_movement(x1, y1, x2, y2, duration, doClick := false, bloomRadius :=
     c2x := x1 + (tx - x1) * 0.7 + myRandom(-jitter, jitter)
     c2y := y1 + (ty - y1) * 0.7 + myRandom(-jitter, jitter)
 
+    accX := 0.0, accY := 0.0
     loop steps {
         te := A_Index / steps
         ; Ease-in-out for velocity profile
@@ -37,9 +38,18 @@ random_mouse_movement(x1, y1, x2, y2, duration, doClick := false, bloomRadius :=
         ; Cubic Bezier interpolation with eased t
         x := (1 - t) ** 3 * x1 + 3 * (1 - t) ** 2 * t * c1x + 3 * (1 - t) * t ** 2 * c2x + t ** 3 * tx
         y := (1 - t) ** 3 * y1 + 3 * (1 - t) ** 2 * t * c1y + 3 * (1 - t) * t ** 2 * c2y + t ** 3 * ty
-        MouseMove(Round(x), Round(y), 0)
-        ; Minimal jitter to avoid robotic timing without visible stutter
-        Sleep(perDelay)
+        ; Accumulate fractional motion to reduce rounding jitter
+        accX += x - Round(x)
+        accY += y - Round(y)
+        ox := Round(x + accX)
+        oy := Round(y + accY)
+        MouseMove(ox, oy, 0)
+        ; Avoid chunky motion due to Windows timer granularity: for tiny delays, yield without full sleep
+        if (perDelay <= 3) {
+            Sleep(0) ; yield timeslice, near-continuous updates
+        } else {
+            Sleep(perDelay)
+        }
     }
     ; Ensure final position is exact
     MouseMove(tx, ty, 0)

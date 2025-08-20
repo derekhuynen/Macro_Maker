@@ -107,12 +107,19 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         recorder.lastTick := A_TickCount
         x := 0, y := 0
         MouseGetPos &x, &y
+        mods := Map(
+            "shift", GetKeyState("Shift", "P") ? 1 : 0,
+            "ctrl", GetKeyState("Ctrl", "P") ? 1 : 0,
+            "alt", GetKeyState("Alt", "P") ? 1 : 0,
+            "win", (GetKeyState("LWin", "P") || GetKeyState("RWin", "P")) ? 1 : 0
+        )
         event := Map(
             "type", "mouse",
             "button", button,
             "x", x,
             "y", y,
-            "delay", delay
+            "delay", delay,
+            "mods", mods
         )
         recorder.macro.Push(event)
     }
@@ -214,35 +221,36 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                 idx++
                 if (recorder.cancel)
                     break
-                SleepWithCancel(Max(0, step["delay"])) ; respect recorded delay
-                if (recorder.cancel)
-                    break
                 try ui_set_step(idx, recorder.macro.Length)
-                if (step["type"] = "mouse") {
+                if (step["type"] = "move") {
+                    ; Match recorded speed: use the recorded delay as the move duration
+                    MouseGetPos &curX, &curY
+                    tx := step["x"], ty := step["y"]
+                    dur := Max(1, step["delay"]) ; avoid 0-duration which would jump
+                    random_mouse_movement(curX, curY, tx, ty, dur, false, recorder.bloomRadius)
+                    curX := tx, curY := ty
+                } else if (step["type"] = "mouse") {
+                    SleepWithCancel(Max(0, step["delay"]))
+                    if (recorder.cancel)
+                        break
                     ; Bloom the click target and use it for both travel and click
                     ; Re-capture current cursor position in case user moved the mouse during playback
                     MouseGetPos &curX, &curY
                     loc := bloom(step["x"], step["y"], recorder.bloomRadius)
                     bx := loc[1], by := loc[2]
                     dur := ComputeMoveDuration(curX, curY, bx, by)
+                    mods := step.Has("mods") ? step["mods"] : Map("shift", 0, "ctrl", 0, "alt", 0, "win", 0)
+                    PressMods(mods)
                     random_mouse_movement(curX, curY, bx, by, dur, true, recorder.bloomRadius)
+                    ReleaseMods(mods)
                     curX := bx, curY := by
                 } else if (step["type"] = "key") {
+                    SleepWithCancel(Max(0, step["delay"]))
+                    if (recorder.cancel)
+                        break
                     Send BuildSendChord(step)
-                } else if (step["type"] = "move") {
-                    ; If user moved far off the recorded path, smoothly return; otherwise follow recorded points instantly
-                    MouseGetPos &curX, &curY
-                    tx := step["x"], ty := step["y"]
-                    dx := tx - curX, dy := ty - curY
-                    dist := Sqrt(dx * dx + dy * dy)
-                    if (dist > 50) {
-                        dur := ComputeMoveDuration(curX, curY, tx, ty)
-                        random_mouse_movement(curX, curY, tx, ty, dur, false, recorder.bloomRadius)
-                    } else {
-                        MouseMove tx, ty, 0
-                    }
-                    curX := tx, curY := ty
                 } else if (step["type"] = "pause") {
+                    SleepWithCancel(Max(0, step["delay"]))
                     ; Nothing else after sleeping the delay for pause
                 }
             }
@@ -336,8 +344,11 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     }
 
     SerializeStep(step) {
-        if (step["type"] = "mouse")
-            return "delay=" step["delay"] ";mouse=" step["button"] ";x=" step["x"] ";y=" step["y"]
+        if (step["type"] = "mouse") {
+            sm := step.Has("mods") ? step["mods"] : Map("shift", 0, "ctrl", 0, "alt", 0, "win", 0)
+            return "delay=" step["delay"] ";mouse=" step["button"] ";x=" step["x"] ";y=" step["y"] ";shift=" sm["shift"
+            ] ";ctrl=" sm["ctrl"] ";alt=" sm["alt"] ";win=" sm["win"]
+        }
         if (step["type"] = "key") {
             mods := step["mods"]
             return "delay=" step["delay"] ";key=" step["key"] ";shift=" mods["shift"] ";ctrl=" mods["ctrl"] ";alt=" mods[
@@ -401,7 +412,8 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         }
         if (btn = "" || x = "" || y = "")
             return false
-        return Map("type", "mouse", "button", btn, "x", x, "y", y, "delay", delay)
+        return Map("type", "mouse", "button", btn, "x", x, "y", y, "delay", delay,
+            "mods", Map("shift", shift, "ctrl", ctrl, "alt", alt, "win", win))
     }
 
     Clamp(val, lo, hi) {
@@ -430,6 +442,40 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     }
 
     ; --- keyboard helpers ---
+
+    PressMods(mods) {
+        if (!IsObject(mods))
+            return
+        if (mods["ctrl"]) {
+            Send "{Ctrl down}"
+        }
+        if (mods["alt"]) {
+            Send "{Alt down}"
+        }
+        if (mods["shift"]) {
+            Send "{Shift down}"
+        }
+        if (mods["win"]) {
+            Send "{LWin down}"
+        }
+    }
+
+    ReleaseMods(mods) {
+        if (!IsObject(mods))
+            return
+        if (mods["win"]) {
+            Send "{LWin up}"
+        }
+        if (mods["shift"]) {
+            Send "{Shift up}"
+        }
+        if (mods["alt"]) {
+            Send "{Alt up}"
+        }
+        if (mods["ctrl"]) {
+            Send "{Ctrl up}"
+        }
+    }
 
     GetKeyCaptureList() {
         keys := []
