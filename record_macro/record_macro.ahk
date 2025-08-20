@@ -223,12 +223,12 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                     break
                 try ui_set_step(idx, recorder.macro.Length)
                 if (step["type"] = "move") {
-                    ; Match recorded speed: use the recorded delay as the move duration
-                    MouseGetPos &curX, &curY
-                    tx := step["x"], ty := step["y"]
-                    dur := Max(1, step["delay"]) ; avoid 0-duration which would jump
-                    random_mouse_movement(curX, curY, tx, ty, dur, false, recorder.bloomRadius)
-                    curX := tx, curY := ty
+                    ; Follow recorded path exactly: wait the recorded delay, then move instantly to the recorded point
+                    SleepWithCancel(Max(0, step["delay"]))
+                    if (recorder.cancel)
+                        break
+                    MouseMove step["x"], step["y"], 0
+                    curX := step["x"], curY := step["y"]
                 } else if (step["type"] = "mouse") {
                     SleepWithCancel(Max(0, step["delay"]))
                     if (recorder.cancel)
@@ -241,7 +241,8 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                     dur := ComputeMoveDuration(curX, curY, bx, by)
                     mods := step.Has("mods") ? step["mods"] : Map("shift", 0, "ctrl", 0, "alt", 0, "win", 0)
                     PressMods(mods)
-                    random_mouse_movement(curX, curY, bx, by, dur, true, recorder.bloomRadius)
+                    ; Deterministic smooth move for click to avoid jitter, then click
+                    smooth_mouse_move(curX, curY, bx, by, dur, true)
                     ReleaseMods(mods)
                     curX := bx, curY := by
                 } else if (step["type"] = "key") {

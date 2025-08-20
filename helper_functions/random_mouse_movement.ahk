@@ -75,3 +75,41 @@ Clamp(val, lo, hi) {
 easeInOutCubic(t) {
     return (t < 0.5) ? 4 * t * t * t : 1 - ((-2 * t + 2) ** 3) / 2
 }
+
+; Deterministic smooth mouse move without jitter, paced to the given duration
+smooth_mouse_move(x1, y1, x2, y2, duration, doClick := false) {
+    tx := x2, ty := y2
+    dx := tx - x1, dy := ty - y1
+    dist := Sqrt(dx * dx + dy * dy)
+    if (dist < 3) {
+        MouseMove(tx, ty, 0)
+        if doClick
+            Click()
+        return
+    }
+    steps := Max(16, Round(Clamp(dist / 2.5, 20, 600)))
+    c1x := x1 + (tx - x1) * 0.3
+    c1y := y1 + (ty - y1) * 0.3
+    c2x := x1 + (tx - x1) * 0.7
+    c2y := y1 + (ty - y1) * 0.7
+    start := A_TickCount
+    i := 1
+    while (i <= steps) {
+        te := i / steps
+        t := easeInOutCubic(te)
+        x := (1 - t) ** 3 * x1 + 3 * (1 - t) ** 2 * t * c1x + 3 * (1 - t) * t ** 2 * c2x + t ** 3 * tx
+        y := (1 - t) ** 3 * y1 + 3 * (1 - t) ** 2 * t * c1y + 3 * (1 - t) * t ** 2 * c2y + t ** 3 * ty
+        MouseMove Round(x), Round(y), 0
+        elapsed := A_TickCount - start
+        target := Floor(duration * te)
+        wait := target - elapsed
+        if (wait > 1)
+            Sleep wait
+        else
+            Sleep 0
+        i++
+    }
+    MouseMove(tx, ty, 0)
+    if doClick
+        Click()
+}
