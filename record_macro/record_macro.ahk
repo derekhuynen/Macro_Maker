@@ -340,8 +340,13 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     ComputeMoveDuration(x1, y1, x2, y2) {
         dx := x2 - x1, dy := y2 - y1
         dist := Sqrt(dx * dx + dy * dy)
-        ; Base 220ms + 0.6ms per px, clamped
-        return Clamp(Round(220 + dist * 0.6), 140, 1200)
+        ; Base 220ms + 0.6ms per px
+        base := 220 + dist * 0.6
+        ; Add slight human-like randomness (~±7% scale and ±8ms)
+        scale := 1 + Random(-0.07, 0.07)
+        dur := Round(base * scale) + Random(-8, 8)
+        ; Clamp to reasonable bounds
+        return Clamp(Round(dur), 120, 1400)
     }
 
     SerializeStep(step) {
