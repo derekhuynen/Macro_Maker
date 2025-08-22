@@ -25,7 +25,8 @@ UI := {
         stepTotal: 0,
         playStartTick: 0,
         playElapsedMs: 0,
-        hidden: false
+        hidden: false,
+        idleSwipe: false
     }
 }
 
@@ -69,7 +70,7 @@ ui_init(opts := 0) {
     g.AddText("xm Background000000 w360 h1") ; divider
 
     ; Two columns under the buttons: Info (left), Keybinds (right)
-    gbInfo := g.AddGroupBox("xm Background000000 w175 h160", "")
+    gbInfo := g.AddGroupBox("xm Background000000 w175 h180", "")
     gbInfo.GetPos(&ix, &iy, &iw, &ih)
     lblTime := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 10, iw - 16), "time: 0:00")
     lblStep := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 30, iw - 16), "step: 0/0")
@@ -77,9 +78,12 @@ ui_init(opts := 0) {
     lblRec := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 70, iw - 16), "recording: false")
     lblPlay := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 90, iw - 16), "playing: false")
     lblLoop := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 110, iw - 16), "loop: false")
+    chkIdleSwipe := g.AddCheckbox(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 135, iw - 16),
+    "Idle Swipe")
+    chkIdleSwipe.OnEvent("Click", ui_toggle_idle_swipe)
 
     ; Create keybinds box aligned to the info box (same y), 10px to the right
-    gbKeys := g.AddGroupBox(Format("x{} y{} w175 h160 Background000000", ix + iw + 10, iy), "")
+    gbKeys := g.AddGroupBox(Format("x{} y{} w175 h180 Background000000", ix + iw + 10, iy), "")
     gbKeys.GetPos(&kx, &ky, &kw, &kh)
     lblKeysHeader := g.AddText(Format("x{} y{} c808080 Background000000 w{}", kx + 8, ky + 10, kw - 16), "Keybinds:")
     lblKeys := g.AddText(Format("x{} y{} cWhite Background000000 w{} r8", kx + 8, ky + 28, kw - 16), "")
@@ -96,6 +100,7 @@ ui_init(opts := 0) {
     UI.controls.lblRec := lblRec
     UI.controls.lblPlay := lblPlay
     UI.controls.lblLoop := lblLoop
+    UI.controls.chkIdleSwipe := chkIdleSwipe
     UI.controls.lblKeysHeader := lblKeysHeader
     UI.controls.lblKeys := lblKeys
 
@@ -213,6 +218,16 @@ ui_set_time(ms) {
     ui_refresh_controls()
 }
 
+ui_set_idle_swipe(val) {
+    UI.state.idleSwipe := !!val
+    if (UI.controls.chkIdleSwipe)
+        UI.controls.chkIdleSwipe.Value := UI.state.idleSwipe
+}
+
+ui_get_idle_swipe() {
+    return UI.state.idleSwipe
+}
+
 ; --- Internals ---
 
 ui_tick() {
@@ -276,6 +291,12 @@ ui_toggle_record(*) {
 ui_toggle_play(*) {
     ui_set_playing(!UI.state.playing)
     ui_send_hotkey(UI.hotkeys.play)
+}
+
+ui_toggle_idle_swipe(*) {
+    UI.state.idleSwipe := !UI.state.idleSwipe
+    if (UI.controls.chkIdleSwipe)
+        UI.controls.chkIdleSwipe.Value := UI.state.idleSwipe
 }
 
 ; --- Keybind label helpers ---

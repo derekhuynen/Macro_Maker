@@ -439,7 +439,67 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
 
     SleepWithCancel(ms) {
         ; Sleep in small chunks to allow responsive stop via F9
+        ; If idle swipe is enabled and sleep is >= 2000ms, do a random swipe
+        if (ms >= 2000) {
+            try {
+                idleSwipeEnabled := ui_get_idle_swipe()
+                if (idleSwipeEnabled) {
+                    ; Sleep for 2 seconds first
+                    remaining := 2000
+                    while (remaining > 0 && !recorder.cancel) {
+                        chunk := remaining > 25 ? 25 : remaining
+                        Sleep chunk
+                        remaining -= chunk
+                    }
+                    if (recorder.cancel)
+                        return
+
+                    ; Do idle swipe if we still have time left
+                    if (ms > 2000) {
+                        DoIdleSwipe(ms - 2000)
+                        return
+                    }
+                }
+            }
+        }
+
+        ; Regular sleep behavior
         remaining := ms
+        while (remaining > 0 && !recorder.cancel) {
+            chunk := remaining > 25 ? 25 : remaining
+            Sleep chunk
+            remaining -= chunk
+        }
+    }
+
+    DoIdleSwipe(remainingMs) {
+        ; Save current mouse position
+        origX := 0, origY := 0
+        MouseGetPos &origX, &origY
+
+        ; Calculate random swipe target within 500px
+        angle := Random(0, 360) * 3.14159 / 180  ; Convert to radians
+        distance := Random(100, 500)  ; Random distance between 100-500px
+        swipeX := Round(origX + distance * Cos(angle))
+        swipeY := Round(origY + distance * Sin(angle))
+
+        ; Calculate timing: use 1/3 of remaining time for swipe out, 1/3 for swipe back, 1/3 for final wait
+        swipeOutTime := Round(remainingMs / 3)
+        swipeBackTime := Round(remainingMs / 3)
+        finalWaitTime := remainingMs - swipeOutTime - swipeBackTime
+
+        ; Swipe to random location
+        smooth_mouse_move(origX, origY, swipeX, swipeY, swipeOutTime, false)
+        if (recorder.cancel)
+            return
+
+        ; Swipe back to original position
+        smooth_mouse_move(swipeX, swipeY, origX, origY, swipeBackTime, false)
+        if (recorder.cancel)
+            return
+
+        ; Wait for remaining time
+        remaining := finalWaitTime
         while (remaining > 0 && !recorder.cancel) {
             chunk := remaining > 25 ? 25 : remaining
             Sleep chunk
