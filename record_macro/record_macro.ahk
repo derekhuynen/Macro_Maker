@@ -33,11 +33,7 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         moveThresholdPx: 2,
         lastX: 0,
         lastY: 0,
-        moveTimerOn: false,
-        ; playback idle wiggle support
-        lastMoveTick: 0,
-        idleWiggleThreshold: 250,
-        idleWiggleRadius: 250
+        moveTimerOn: false
     }
 
     CoordMode "Mouse", "Screen"
@@ -216,7 +212,6 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
             ui_set_playing(true)
             ui_set_loop(recorder.loop)
         }
-        recorder.lastMoveTick := A_TickCount
         loop {
             ; Capture starting mouse pos to compute paths
             curX := 0, curY := 0
@@ -234,7 +229,6 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                         break
                     MouseMove step["x"], step["y"], 0
                     curX := step["x"], curY := step["y"]
-                    recorder.lastMoveTick := A_TickCount
                 } else if (step["type"] = "mouse") {
                     SleepWithCancel(Max(0, step["delay"]))
                     if (recorder.cancel)
@@ -251,7 +245,6 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
                     smooth_mouse_move(curX, curY, bx, by, dur, true)
                     ReleaseMods(mods)
                     curX := bx, curY := by
-                    recorder.lastMoveTick := A_TickCount
                 } else if (step["type"] = "key") {
                     SleepWithCancel(Max(0, step["delay"]))
                     if (recorder.cancel)
@@ -445,56 +438,13 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     }
 
     SleepWithCancel(ms) {
-        ; Sleep in small chunks to allow responsive stop and optionally inject idle wiggle
+        ; Sleep in small chunks to allow responsive stop via F9
         remaining := ms
         while (remaining > 0 && !recorder.cancel) {
-            ; If we've been idle (no mouse movement) longer than threshold, do a tiny wiggle
-            if (recorder.playing) {
-                since := A_TickCount - recorder.lastMoveTick
-                if (since >= recorder.idleWiggleThreshold && remaining >= 1000) {
-                    ; 1000ms smooth micro-move traversing 5 waypoints within 250px
-                    dur := 1000
-                    DoIdleWiggle(dur)
-                    remaining -= dur
-                    continue
-                }
-            }
-            chunk := remaining > 20 ? 20 : remaining
+            chunk := remaining > 25 ? 25 : remaining
             Sleep chunk
             remaining -= chunk
         }
-    }
-
-    DoIdleWiggle(dur := 1000) {
-        if (!recorder.playing)
-            return
-        x := 0, y := 0
-        MouseGetPos &x, &y
-        r := Max(5, recorder.idleWiggleRadius)
-        ; Generate 5 waypoints within radius r
-        sw := A_ScreenWidth, sh := A_ScreenHeight
-        pts := []
-        i := 1
-        while (i <= 5) {
-            px := x + Random(-r, r)
-            py := y + Random(-r, r)
-            px := Clamp(px, 0, sw - 1)
-            py := Clamp(py, 0, sh - 1)
-            pts.Push([px, py])
-            i++
-        }
-        ; Split duration across 5 segments
-        per := Floor(dur / 5)
-        rem := dur - per * 5
-        cx := x, cy := y
-        j := 1
-        for p in pts {
-            segDur := per + (j = 5 ? rem : 0)
-            smooth_mouse_move(cx, cy, p[1], p[2], segDur, false)
-            cx := p[1], cy := p[2]
-            j++
-        }
-        recorder.lastMoveTick := A_TickCount
     }
 
     ; --- keyboard helpers ---
