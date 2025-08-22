@@ -444,8 +444,20 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
             try {
                 idleSwipeEnabled := ui_get_idle_swipe()
                 if (idleSwipeEnabled) {
-                    ; Do idle swipe first
-                    DoIdleSwipe()
+                    ; Random 15% chance to do idle swipe
+                    if (Random(1, 100) <= 15) {
+                        ; Wait a bit before doing the swipe (random 0.5-1.5 seconds)
+                        waitTime := Random(500, 1500)
+                        remaining := waitTime
+                        while (remaining > 0 && !recorder.cancel) {
+                            chunk := remaining > 25 ? 25 : remaining
+                            Sleep chunk
+                            remaining -= chunk
+                        }
+                        if (!recorder.cancel) {
+                            DoIdleSwipe()
+                        }
+                    }
                 }
             }
         }
@@ -458,7 +470,6 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
             remaining -= chunk
         }
     }
-
     DoIdleSwipe() {
         ; Get current mouse position
         origX := 0, origY := 0
