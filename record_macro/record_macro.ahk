@@ -37,7 +37,7 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         ; playback idle wiggle support
         lastMoveTick: 0,
         idleWiggleThreshold: 250,
-        idleWiggleRadius: 10
+        idleWiggleRadius: 250
     }
 
     CoordMode "Mouse", "Screen"
@@ -451,9 +451,9 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
             ; If we've been idle (no mouse movement) longer than threshold, do a tiny wiggle
             if (recorder.playing) {
                 since := A_TickCount - recorder.lastMoveTick
-                if (since >= recorder.idleWiggleThreshold && remaining >= 60) {
-                    ; 120-220ms smooth micro-move within a small radius
-                    dur := Clamp(Random(120, 220), 60, 260)
+                if (since >= recorder.idleWiggleThreshold && remaining >= 1000) {
+                    ; 1000ms smooth micro-move traversing 5 waypoints within 250px
+                    dur := 1000
                     DoIdleWiggle(dur)
                     remaining -= dur
                     continue
@@ -465,27 +465,35 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
         }
     }
 
-    DoIdleWiggle(dur := 50) {
+    DoIdleWiggle(dur := 1000) {
         if (!recorder.playing)
             return
         x := 0, y := 0
         MouseGetPos &x, &y
-        r := Max(2, recorder.idleWiggleRadius)
-        ; Two-segment micro-move: current -> p1 -> p2
-        p1x := x + Random(-r, r)
-        p1y := y + Random(-r, r)
-        p2x := x + Random(-r, r)
-        p2y := y + Random(-r, r)
-        ; Clamp within screen bounds
+        r := Max(5, recorder.idleWiggleRadius)
+        ; Generate 5 waypoints within radius r
         sw := A_ScreenWidth, sh := A_ScreenHeight
-        p1x := Clamp(p1x, 0, sw - 1)
-        p1y := Clamp(p1y, 0, sh - 1)
-        p2x := Clamp(p2x, 0, sw - 1)
-        p2y := Clamp(p2y, 0, sh - 1)
-        d1 := Max(40, Round(dur * Random(0.45, 0.6)))
-        d2 := Max(30, dur - d1)
-        smooth_mouse_move(x, y, p1x, p1y, d1, false)
-        smooth_mouse_move(p1x, p1y, p2x, p2y, d2, false)
+        pts := []
+        i := 1
+        while (i <= 5) {
+            px := x + Random(-r, r)
+            py := y + Random(-r, r)
+            px := Clamp(px, 0, sw - 1)
+            py := Clamp(py, 0, sh - 1)
+            pts.Push([px, py])
+            i++
+        }
+        ; Split duration across 5 segments
+        per := Floor(dur / 5)
+        rem := dur - per * 5
+        cx := x, cy := y
+        j := 1
+        for p in pts {
+            segDur := per + (j = 5 ? rem : 0)
+            smooth_mouse_move(cx, cy, p[1], p[2], segDur, false)
+            cx := p[1], cy := p[2]
+            j++
+        }
         recorder.lastMoveTick := A_TickCount
     }
 
