@@ -26,7 +26,9 @@ UI := {
         playStartTick: 0,
         playElapsedMs: 0,
         hidden: false,
-        idleSwipe: false
+        idleSwipe: false,
+        autoShutdownHours: 0,
+        scriptStartTime: A_TickCount
     }
 }
 
@@ -70,7 +72,7 @@ ui_init(opts := 0) {
     g.AddText("xm Background000000 w360 h1") ; divider
 
     ; Two columns under the buttons: Info (left), Keybinds (right)
-    gbInfo := g.AddGroupBox("xm Background000000 w175 h180", "")
+    gbInfo := g.AddGroupBox("xm Background000000 w175 h220", "")
     gbInfo.GetPos(&ix, &iy, &iw, &ih)
     lblTime := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 10, iw - 16), "time: 0:00")
     lblStep := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 30, iw - 16), "step: 0/0")
@@ -78,12 +80,19 @@ ui_init(opts := 0) {
     lblRec := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 70, iw - 16), "recording: false")
     lblPlay := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 90, iw - 16), "playing: false")
     lblLoop := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 110, iw - 16), "loop: false")
-    chkIdleSwipe := g.AddCheckbox(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 135, iw - 16),
+    lblUptime := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 130, iw - 16), "uptime: 0:00")
+    chkIdleSwipe := g.AddCheckbox(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 155, iw - 16),
     "Idle Swipe")
     chkIdleSwipe.OnEvent("Click", ui_toggle_idle_swipe)
 
+    ; Auto-shutdown controls
+    lblShutdown := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 8, iy + 175, 80), "Auto-stop:")
+    edtHours := g.AddEdit(Format("x{} y{} w30 h18", ix + 90, iy + 173), "0")
+    edtHours.OnEvent("Change", ui_update_shutdown_hours)
+    lblHours := g.AddText(Format("x{} y{} cWhite Background000000 w{}", ix + 125, iy + 175, 30), "hrs")
+
     ; Create keybinds box aligned to the info box (same y), 10px to the right
-    gbKeys := g.AddGroupBox(Format("x{} y{} w175 h180 Background000000", ix + iw + 10, iy), "")
+    gbKeys := g.AddGroupBox(Format("x{} y{} w175 h220 Background000000", ix + iw + 10, iy), "")
     gbKeys.GetPos(&kx, &ky, &kw, &kh)
     lblKeysHeader := g.AddText(Format("x{} y{} c808080 Background000000 w{}", kx + 8, ky + 10, kw - 16), "Keybinds:")
     lblKeys := g.AddText(Format("x{} y{} cWhite Background000000 w{} r8", kx + 8, ky + 28, kw - 16), "")
@@ -100,7 +109,9 @@ ui_init(opts := 0) {
     UI.controls.lblRec := lblRec
     UI.controls.lblPlay := lblPlay
     UI.controls.lblLoop := lblLoop
+    UI.controls.lblUptime := lblUptime
     UI.controls.chkIdleSwipe := chkIdleSwipe
+    UI.controls.edtHours := edtHours
     UI.controls.lblKeysHeader := lblKeysHeader
     UI.controls.lblKeys := lblKeys
 
@@ -228,6 +239,14 @@ ui_get_idle_swipe() {
     return UI.state.idleSwipe
 }
 
+ui_get_auto_shutdown_hours() {
+    return UI.state.autoShutdownHours
+}
+
+ui_get_script_uptime_hours() {
+    return (A_TickCount - UI.state.scriptStartTime) / (1000 * 60 * 60)
+}
+
 ; --- Internals ---
 
 ui_tick() {
@@ -235,6 +254,18 @@ ui_tick() {
     ui_set_mouse(mx, my)
     if (UI.state.playing && UI.state.playStartTick)
         ui_update_time_label()
+    ui_update_uptime_label()
+}
+
+ui_update_uptime_label() {
+    uptimeMs := A_TickCount - UI.state.scriptStartTime
+    uptimeSec := Floor(uptimeMs / 1000)
+    hours := Floor(uptimeSec / 3600)
+    mins := Floor((uptimeSec - hours * 3600) / 60)
+    secs := Mod(uptimeSec, 60)
+    uptimeText := Format("{:d}:{:02d}:{:02d}", hours, mins, secs)
+    if (UI.controls.lblUptime)
+        UI.controls.lblUptime.Text := "uptime: " uptimeText
 }
 
 ui_update_time_label() {
@@ -297,6 +328,16 @@ ui_toggle_idle_swipe(*) {
     UI.state.idleSwipe := !UI.state.idleSwipe
     if (UI.controls.chkIdleSwipe)
         UI.controls.chkIdleSwipe.Value := UI.state.idleSwipe
+}
+
+ui_update_shutdown_hours(*) {
+    if (UI.controls.edtHours) {
+        try {
+            UI.state.autoShutdownHours := Float(UI.controls.edtHours.Text)
+        } catch {
+            UI.state.autoShutdownHours := 0
+        }
+    }
 }
 
 ; --- Keybind label helpers ---

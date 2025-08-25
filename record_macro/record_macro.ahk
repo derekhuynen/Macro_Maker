@@ -438,6 +438,20 @@ MacroRecorder(startStopHotkey := "F8", playHotkey := "F9", saveHotkey := "F10", 
     }
 
     SleepWithCancel(ms) {
+        ; Check for auto-shutdown before sleeping
+        try {
+            shutdownHours := ui_get_auto_shutdown_hours()
+            if (shutdownHours > 0) {
+                uptimeHours := ui_get_script_uptime_hours()
+                if (uptimeHours >= shutdownHours) {
+                    ToolTip "Auto-shutdown: " shutdownHours " hours reached. Exiting...", 10, 10
+                    SetTimer () => ExitApp(), -2000
+                    recorder.cancel := true
+                    return
+                }
+            }
+        }
+
         ; Sleep in small chunks to allow responsive stop via F9
         ; If idle swipe is enabled and sleep is >= 2000ms, do a random swipe
         if (ms >= 2000) {
